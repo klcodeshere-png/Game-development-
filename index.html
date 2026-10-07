@@ -1,0 +1,2148 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Trivandrum GTA 3D - Mobile Open World</title>
+    <!-- Tailwind CSS for modern responsive HUD styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js 3D Graphics Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+            touch-action: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050b14;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overscroll-behavior: none;
+        }
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+            z-index: 1;
+        }
+        /* Mobile Touch HUD Overlays */
+        .glass-hud {
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        }
+        .touch-action-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9999px;
+            font-weight: 800;
+            text-transform: uppercase;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5), inset 0 2px 2px rgba(255, 255, 255, 0.25);
+            transition: transform 0.08s ease, filter 0.08s ease;
+            pointer-events: auto;
+            touch-action: manipulation;
+        }
+        .touch-action-btn:active {
+            transform: scale(0.92);
+            filter: brightness(1.25);
+        }
+        .btn-enter { background: linear-gradient(135deg, #0284c7, #0369a1); border: 2px solid #38bdf8; }
+        .btn-gas { background: linear-gradient(135deg, #16a34a, #15803d); border: 2px solid #4ade80; }
+        .btn-brake { background: linear-gradient(135deg, #dc2626, #b91c1c); border: 2px solid #f87171; }
+        .btn-jump { background: linear-gradient(135deg, #7c3aed, #6d28d9); border: 2px solid #c084fc; }
+        .btn-horn { background: linear-gradient(135deg, #d97706, #b45309); border: 2px solid #fde047; }
+        .btn-cam { background: linear-gradient(135deg, #475569, #334155); border: 2px solid #94a3b8; }
+        .btn-reset { background: linear-gradient(135deg, #64748b, #475569); border: 1px solid #cbd5e1; }
+
+        /* Virtual Thumb Joystick */
+        #joystick-container {
+            position: absolute;
+            bottom: 24px;
+            left: 20px;
+            width: 140px;
+            height: 140px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 0%, rgba(15, 23, 42, 0.65) 100%);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            pointer-events: none;
+            z-index: 30;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        #joystick-knob {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 58px;
+            height: 58px;
+            margin-top: -29px;
+            margin-left: -29px;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 35%, #fde047, #ca8a04);
+            border: 2px solid #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+            pointer-events: none;
+            transition: transform 0.04s ease-out;
+        }
+
+        /* Location popup animation */
+        @keyframes popNotice {
+            0% { transform: translate(-50%, -18px) scale(0.9); opacity: 0; }
+            15% { transform: translate(-50%, 0) scale(1.04); opacity: 1; }
+            25% { transform: translate(-50%, 0) scale(1); }
+            80% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -12px) scale(0.95); opacity: 0; }
+        }
+        .banner-pop {
+            animation: popNotice 3.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    </style>
+</head>
+<body class="w-full h-full text-white select-none overflow-hidden">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Tap to Start / Audio Unlock Overlay -->
+    <div id="start-overlay" class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md p-6 text-center">
+        <div class="glass-hud p-6 md:p-8 rounded-3xl max-w-sm w-full border border-amber-400/50 shadow-2xl space-y-4">
+            <div class="inline-block p-3 rounded-2xl bg-amber-500/20 text-3xl">🌴</div>
+            <h1 class="text-xl md:text-2xl font-black tracking-wide text-amber-300">TRIVANDRUM 3D</h1>
+            <p class="text-xs md:text-sm text-slate-300">GTA-style miniature open world of Thiruvananthapuram, Kerala.</p>
+            <div class="text-left text-xs text-amber-200/90 bg-slate-900/80 p-3 rounded-xl border border-amber-500/20 space-y-1">
+                <p>🛕 Padmanabhaswamy & East Fort</p>
+                <p>🏖️ Kovalam Lighthouse & Beach</p>
+                <p>🚢 Vizhinjam Deepwater Port</p>
+                <p>⛰️ Ponmudi Hill Station & Ghats</p>
+                <p>🚌 Kerala Auto & KSRTC Aana Vandi</p>
+            </div>
+            <button id="start-btn" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-sm tracking-wider uppercase shadow-xl transition transform active:scale-95">
+                TAP TO PLAY 🚀
+            </button>
+            <p class="text-[10px] text-slate-400">Touchscreen optimized • Audio synthesized in browser</p>
+        </div>
+    </div>
+
+    <!-- Top Left Title Badge & Quick Help -->
+    <div class="fixed top-3 left-3 z-20 flex flex-col space-y-1 pointer-events-none">
+        <div class="glass-hud px-3 py-1.5 rounded-xl flex items-center space-x-2 pointer-events-auto">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+            <span class="text-xs font-black tracking-wider text-amber-300">TVM GTA</span>
+            <span class="text-[10px] text-slate-400 font-semibold">KL 01</span>
+        </div>
+        <button id="btn-show-help" class="glass-hud px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-300 pointer-events-auto hover:text-white w-max">
+            ❓ Controls Info
+        </button>
+    </div>
+
+    <!-- Top Center Landmark Discovery Toast -->
+    <div id="landmark-toast" class="fixed top-4 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none hidden">
+        <div class="glass-hud px-5 py-2 rounded-2xl flex items-center space-x-3 border border-amber-400/60 shadow-2xl">
+            <span class="text-2xl" id="toast-icon">🛕</span>
+            <div class="text-left">
+                <p class="text-[10px] uppercase font-bold text-amber-400 tracking-widest" id="toast-badge">LANDMARK</p>
+                <h2 class="text-sm md:text-base font-black text-white" id="toast-name">EAST FORT</h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- Center Interaction Prompt (Appears when near vehicle) -->
+    <div id="enter-prompt" class="fixed bottom-36 left-1/2 transform -translate-x-1/2 z-30 pointer-events-none hidden">
+        <div class="glass-hud px-4 py-2 rounded-xl flex items-center space-x-2 border border-yellow-400 animate-bounce">
+            <span class="bg-amber-400 text-black px-1.5 py-0.5 rounded text-xs font-black">E / TAP</span>
+            <span class="text-xs font-bold text-white tracking-wide" id="prompt-veh-name">DRIVE KERALA AUTO</span>
+        </div>
+    </div>
+
+    <!-- Top Right Circular Radar Minimap -->
+    <div class="fixed top-3 right-3 z-20 flex flex-col items-end pointer-events-none">
+        <div class="relative w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-2 border-amber-400/80 shadow-2xl bg-slate-950/80 glass-hud">
+            <canvas id="minimap-canvas" class="w-full h-full block"></canvas>
+            <div class="absolute top-1 left-1/2 transform -translate-x-1/2 text-[9px] font-black text-amber-400">N</div>
+        </div>
+        <div id="zone-name-pill" class="mt-1 glass-hud px-2 py-0.5 rounded-md text-[9px] font-black tracking-wider text-amber-300">
+            EAST FORT
+        </div>
+    </div>
+
+    <!-- Driving Speedometer HUD (Visible when driving) -->
+    <div id="speedometer-box" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 z-20 pointer-events-none hidden">
+        <div class="glass-hud px-4 py-1.5 rounded-2xl flex items-center space-x-3 border border-emerald-500/50">
+            <div class="flex flex-col items-center">
+                <span class="text-[9px] font-bold text-slate-400 uppercase" id="veh-hud-title">AUTO-RICKSHAW</span>
+                <div class="flex items-baseline space-x-1">
+                    <span id="speed-digits" class="text-2xl font-black text-white font-mono">0</span>
+                    <span class="text-[10px] text-slate-400 font-bold">KM/H</span>
+                </div>
+            </div>
+            <div class="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-white/10">
+                <div id="speed-meter-fill" class="h-full bg-emerald-400 w-0 transition-all duration-75"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Touch Joystick Touch Capture Zone (Left Screen) -->
+    <div id="touch-left-zone" class="fixed bottom-0 left-0 w-1/2 h-3/5 z-20 pointer-events-auto"></div>
+    <div id="joystick-container">
+        <div id="joystick-knob"></div>
+    </div>
+
+    <!-- Touch Drag Camera Rotation Zone (Upper & Right Screen) -->
+    <div id="touch-cam-zone" class="fixed top-0 right-0 w-full h-3/5 z-10 pointer-events-auto"></div>
+
+    <!-- Bottom Right Touch Action Buttons Column -->
+    <div class="fixed bottom-4 right-4 z-20 flex flex-col items-end space-y-2 pointer-events-none">
+        <!-- Top row: Utility buttons -->
+        <div class="flex items-center space-x-2">
+            <button id="btn-touch-cam" class="touch-action-btn btn-cam w-11 h-11 text-[10px] text-white">
+                🎥
+            </button>
+            <button id="btn-touch-horn" class="touch-action-btn btn-horn w-11 h-11 text-[11px] text-white">
+                📢
+            </button>
+            <button id="btn-touch-reset" class="touch-action-btn btn-reset w-11 h-11 text-[9px] text-white">
+                🔄
+            </button>
+        </div>
+
+        <!-- Middle row: Enter / Exit vehicle -->
+        <div class="flex items-center space-x-2">
+            <button id="btn-touch-enter" class="touch-action-btn btn-enter px-4 h-12 text-xs font-black text-white flex items-center space-x-1 shadow-lg">
+                <span id="btn-enter-label">🚗 DRIVE</span>
+            </button>
+        </div>
+
+        <!-- Bottom row: Movement / Gas & Brake pedals -->
+        <div class="flex items-center space-x-3 pt-1">
+            <button id="btn-touch-brake" class="touch-action-btn btn-brake w-16 h-16 text-[11px] font-black text-white flex flex-col items-center justify-center">
+                <span id="brake-label-main">BRAKE</span>
+                <span class="text-[8px] opacity-75" id="brake-label-sub">/ REV</span>
+            </button>
+            <button id="btn-touch-gas" class="touch-action-btn btn-gas w-18 px-5 h-16 text-sm font-black text-white flex flex-col items-center justify-center">
+                <span id="gas-label-main">GAS</span>
+                <span class="text-[8px] opacity-80" id="gas-label-sub">ACCEL 🚀</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Help Modal Overlay -->
+    <div id="help-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="glass-hud p-6 rounded-3xl max-w-sm w-full border border-amber-400/40 text-xs space-y-3">
+            <div class="flex justify-between items-center border-b border-white/10 pb-2">
+                <h3 class="text-sm font-black text-amber-400">🌴 CONTROLS GUIDE</h3>
+                <button id="btn-close-help" class="text-slate-400 text-lg font-bold px-1">✕</button>
+            </div>
+            <div class="space-y-2 text-slate-300">
+                <p><strong class="text-emerald-400">📱 Mobile Touch:</strong></p>
+                <ul class="list-disc pl-4 space-y-1">
+                    <li>Bottom-Left: Joystick for walking / steering</li>
+                    <li>Drag Upper Screen: Rotate camera 360°</li>
+                    <li>GAS: Walk sprint or vehicle accelerate</li>
+                    <li>BRAKE / JUMP: Jump on foot, reverse in car</li>
+                    <li>DRIVE: Enter or exit nearest vehicle</li>
+                    <li>📢: Kerala horn / KSRTC air horn</li>
+                </ul>
+                <p><strong class="text-amber-300">💻 Desktop Keyboard:</strong></p>
+                <ul class="list-disc pl-4 space-y-1">
+                    <li>WASD / Arrow Keys: Move / Steer</li>
+                    <li>Shift: Sprint | Space: Jump / Handbrake</li>
+                    <li>E: Enter / Exit vehicle | H: Horn | C: Camera</li>
+                </ul>
+            </div>
+            <button id="btn-dismiss-help" class="w-full py-2.5 rounded-xl bg-amber-500 text-black font-extrabold uppercase">
+                GOT IT
+            </button>
+        </div>
+    </div>
+
+    <script>
+    class ProceduralAudio {
+        constructor() {
+            this.ctx = null;
+            this.engineOsc = null;
+            this.engineGain = null;
+            this.isDriving = false;
+            this.initialized = false;
+        }
+
+        init() {
+            if (this.initialized) return;
+            try {
+                const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioCtx();
+                this.initialized = true;
+                this.createEngine();
+                this.createOceanWaves();
+            } catch(e) {
+                console.warn('AudioContext not allowed or ready', e);
+            }
+        }
+
+        createEngine() {
+            if (!this.ctx) return;
+            this.engineOsc = this.ctx.createOscillator();
+            const filter = this.ctx.createBiquadFilter();
+            this.engineGain = this.ctx.createGain();
+
+            this.engineOsc.type = 'sawtooth';
+            this.engineOsc.frequency.setValueAtTime(42, this.ctx.currentTime);
+
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(280, this.ctx.currentTime);
+
+            this.engineGain.gain.setValueAtTime(0.0001, this.ctx.currentTime);
+
+            this.engineOsc.connect(filter);
+            filter.connect(this.engineGain);
+            this.engineGain.connect(this.ctx.destination);
+            this.engineOsc.start();
+        }
+
+        setEngineState(speedNormalized, inVehicle, isBus = false) {
+            if (!this.initialized || !this.ctx || !this.engineOsc || !this.engineGain) return;
+            const now = this.ctx.currentTime;
+            if (inVehicle) {
+                const baseFreq = isBus ? 32 : 48;
+                const freq = baseFreq + Math.abs(speedNormalized) * (isBus ? 110 : 160);
+                this.engineOsc.frequency.setTargetAtTime(freq, now, 0.05);
+                this.engineGain.gain.setTargetAtTime(0.12, now, 0.05);
+            } else {
+                this.engineGain.gain.setTargetAtTime(0.0001, now, 0.1);
+            }
+        }
+
+        playHorn(isBus = false) {
+            if (!this.initialized || !this.ctx) return;
+            const now = this.ctx.currentTime;
+            if (isBus) {
+                // KSRTC Melodic Air Horn Sequence
+                const freqs = [350, 440, 580];
+                freqs.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+                    gain.gain.setValueAtTime(0.14, now + idx * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.35);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + idx * 0.06);
+                    osc.stop(now + idx * 0.06 + 0.4);
+                });
+            } else {
+                // Classic Auto-Rickshaw / Car Dual Honk
+                [440, 520].forEach(f => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(f, now);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.26);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.28);
+                });
+            }
+        }
+
+        playJump() {
+            if (!this.initialized || !this.ctx) return;
+            const now = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(140, now);
+            osc.frequency.exponentialRampToValueAtTime(280, now + 0.12);
+            gain.gain.setValueAtTime(0.1, now);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now);
+            osc.stop(now + 0.15);
+        }
+
+        playDiscoveryDing() {
+            if (!this.initialized || !this.ctx) return;
+            const now = this.ctx.currentTime;
+            [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+                gain.gain.setValueAtTime(0.09, now + idx * 0.07);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.4);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start(now + idx * 0.07);
+                osc.stop(now + idx * 0.07 + 0.45);
+            });
+        }
+
+        createOceanWaves() {
+            if (!this.ctx) return;
+            const buffer = this.ctx.createBuffer(1, this.ctx.sampleRate * 2, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < data.length; i++) {
+                data[i] = (Math.random() * 2 - 1) * 0.04;
+            }
+            const noise = this.ctx.createBufferSource();
+            noise.buffer = buffer;
+            noise.loop = true;
+
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(320, this.ctx.currentTime);
+            filter.Q.setValueAtTime(1.8, this.ctx.currentTime);
+
+            const gain = this.ctx.createGain();
+            gain.gain.setValueAtTime(0.035, this.ctx.currentTime);
+
+            noise.connect(filter);
+            filter.connect(gain);
+            gain.connect(this.ctx.destination);
+            noise.start();
+        }
+    }
+
+    const audio = new ProceduralAudio();
+
+    const ProceduralTextures = {
+        createRoadCanvas() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#22262a';
+            ctx.fillRect(0, 0, 512, 512);
+
+            // Subtle asphalt noise
+            for (let i = 0; i < 3000; i++) {
+                ctx.fillStyle = Math.random() > 0.5 ? '#2c3035' : '#181b1e';
+                ctx.fillRect(Math.random() * 512, Math.random() * 512, 2, 2);
+            }
+
+            // White border shoulders
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(16, 0, 10, 512);
+            ctx.fillRect(512 - 26, 0, 10, 512);
+
+            // Double Solid Indian Median (Yellow)
+            ctx.fillStyle = '#eab308';
+            ctx.fillRect(251, 0, 4, 512);
+            ctx.fillRect(257, 0, 4, 512);
+
+            // Dashed Left-Hand Driving dividing stripes
+            ctx.fillStyle = '#f8fafc';
+            for (let y = 0; y < 512; y += 64) {
+                ctx.fillRect(132, y + 10, 6, 36);
+                ctx.fillRect(374, y + 10, 6, 36);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            return tex;
+        },
+
+        createMalayalamSign(malText, engText, bgColor = '#065f46') {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 160;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, 512, 160);
+
+            // Gold border
+            ctx.strokeStyle = '#facc15';
+            ctx.lineWidth = 8;
+            ctx.strokeRect(4, 4, 504, 152);
+
+            // Malayalam Script
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 36px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(malText, 256, 68);
+
+            // English Subtitle
+            ctx.fillStyle = '#fef08a';
+            ctx.font = 'bold 24px -apple-system, sans-serif';
+            ctx.fillText(engText, 256, 122);
+
+            return new THREE.CanvasTexture(canvas);
+        },
+
+        createDravidianGopuramStone() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#b7925e';
+            ctx.fillRect(0, 0, 256, 256);
+
+            for (let y = 0; y < 256; y += 32) {
+                ctx.fillStyle = '#83653b';
+                ctx.fillRect(0, y, 256, 4);
+                ctx.fillStyle = '#ddc197';
+                ctx.fillRect(0, y + 4, 256, 2);
+
+                for (let x = 0; x < 256; x += 16) {
+                    ctx.fillStyle = '#6b502c';
+                    ctx.fillRect(x, y + 6, 2, 22);
+                    // Relief carvings
+                    ctx.fillStyle = '#f5e4c3';
+                    ctx.fillRect(x + 5, y + 12, 6, 8);
+                }
+            }
+            return new THREE.CanvasTexture(canvas);
+        },
+
+        createOceanWaves() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+
+            const grad = ctx.createLinearGradient(0, 0, 256, 256);
+            grad.addColorStop(0, '#0284c7');
+            grad.addColorStop(1, '#0369a1');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 256, 256);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.lineWidth = 3;
+            for (let i = 0; i < 16; i++) {
+                ctx.beginPath();
+                const y = Math.random() * 256;
+                ctx.moveTo(0, y);
+                ctx.bezierCurveTo(64, y + 12, 192, y - 12, 256, y + 6);
+                ctx.stroke();
+            }
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            tex.repeat.set(8, 8);
+            return tex;
+        }
+    };
+
+    let scene, camera, renderer;
+    let clock = new THREE.Clock();
+
+    // World Collections
+    const colliders = [];
+    const drivableVehicles = [];
+    const npcTraffic = [];
+    const npcPedestrians = [];
+    const landmarkZones = [];
+    const animatedOceanList = [];
+
+    // Player & Driving State
+    let player = null;
+    let currentVehicle = null;
+    let currentLandmarkId = "";
+    let cameraMode = 0; // 0: Normal Chase, 1: High Chase, 2: Top-down
+
+    // Input States
+    const keys = {
+        forward: false,
+        backward: false,
+        left: false,
+        right: false,
+        sprint: false,
+        jump: false
+    };
+
+    const touchState = {
+        joystickActive: false,
+        startX: 0,
+        startY: 0,
+        inputX: 0,
+        inputY: 0
+    };
+
+    const cameraControl = {
+        theta: Math.PI * 0.25,
+        phi: 0.38,
+        dist: 9.5
+    };
+
+    function initScene() {
+        const canvas = document.getElementById('game-canvas');
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x7ec8f2); // Kerala clear tropical sky
+        scene.fog = new THREE.FogExp2(0x9bd5f5, 0.0026);
+
+        camera = new THREE.PerspectiveCamera(54, window.innerWidth / window.innerHeight, 0.2, 1200);
+        camera.position.set(0, 16, 26);
+
+        renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            antialias: true,
+            powerPreference: 'high-performance'
+        });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        // Warm Kerala Sunlight
+        const sun = new THREE.DirectionalLight(0xfff7ed, 1.2);
+        sun.position.set(130, 240, 110);
+        sun.castShadow = true;
+        sun.shadow.mapSize.width = 2048;
+        sun.shadow.mapSize.height = 2048;
+        sun.shadow.camera.near = 10;
+        sun.shadow.camera.far = 550;
+        const sDist = 280;
+        sun.shadow.camera.left = -sDist;
+        sun.shadow.camera.right = sDist;
+        sun.shadow.camera.top = sDist;
+        sun.shadow.camera.bottom = -sDist;
+        sun.shadow.bias = -0.0004;
+        scene.add(sun);
+
+        const hemiLight = new THREE.HemisphereLight(0xbae6fd, 0x166534, 0.45);
+        scene.add(hemiLight);
+
+        const amb = new THREE.AmbientLight(0xffffff, 0.55);
+        scene.add(amb);
+    }
+
+    function buildTrivandrumMiniatureWorld() {
+        const roadTex = ProceduralTextures.createRoadCanvas();
+        roadTex.repeat.set(1, 14);
+        const roadMat = new THREE.MeshLambertMaterial({ map: roadTex });
+
+        const grassMat = new THREE.MeshLambertMaterial({ color: 0x2d6a4f });
+        const sandMat = new THREE.MeshLambertMaterial({ color: 0xdfc28d });
+        const seaTex = ProceduralTextures.createOceanWaves();
+        const seaMat = new THREE.MeshLambertMaterial({ map: seaTex });
+
+        // Base Terrain with displaced Ponmudi Hill & Kovalam Sea Basin
+        const terrGeo = new THREE.PlaneGeometry(900, 900, 52, 52);
+        terrGeo.rotateX(-Math.PI / 2);
+
+        const pos = terrGeo.attributes.position;
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const z = pos.getZ(i);
+            let y = 0;
+
+            // Ponmudi Hill Ridge (North-East: X: 120..260, Z: -120..-260)
+            if (x > 90 && z < -60) {
+                const distToPeak = Math.hypot(x - 220, z - (-220));
+                if (distToPeak < 180) {
+                    y = Math.cos((distToPeak / 180) * (Math.PI / 2)) * 44;
+                }
+            }
+            // Coastal basin for Kovalam & Vizhinjam (West & South-West)
+            if (x < -140 && z > 60) {
+                const cDist = Math.hypot(x - (-300), z - 260);
+                if (cDist < 240) {
+                    y = -2.8;
+                }
+            }
+            pos.setY(i, y);
+        }
+        terrGeo.computeVertexNormals();
+
+        const terrain = new THREE.Mesh(terrGeo, grassMat);
+        terrain.receiveShadow = true;
+        scene.add(terrain);
+
+        // Kovalam & Vizhinjam Arabian Sea Water
+        const seaGeo = new THREE.PlaneGeometry(440, 440);
+        seaGeo.rotateX(-Math.PI / 2);
+        const ocean = new THREE.Mesh(seaGeo, seaMat);
+        ocean.position.set(-270, -0.6, 250);
+        scene.add(ocean);
+
+        animatedOceanList.push({
+            update: (time) => {
+                seaTex.offset.x = (time * 0.04) % 1;
+                seaTex.offset.y = (time * 0.07) % 1;
+            }
+        });
+
+        // Kovalam Beach Sand
+        const sandGeo = new THREE.PlaneGeometry(160, 160);
+        sandGeo.rotateX(-Math.PI / 2);
+        const sandMesh = new THREE.Mesh(sandGeo, sandMat);
+        sandMesh.position.set(-180, 0.06, 220);
+        sandMesh.receiveShadow = true;
+        scene.add(sandMesh);
+
+        // Construct Infrastructure & Landmarks
+        createRoadSystem(roadMat);
+        createElevatedFlyover();
+        createPadmanabhaswamyAndEastFort();
+        createVizhinjamPort();
+        createKovalamLighthouse();
+        createPonmudiHill();
+        createKanakakunnuPalace();
+        createTechnoparkAndLuLu();
+        createGreenfieldStadium();
+        createKeralaDressing();
+    }
+
+    function createRoadSystem(roadMat) {
+        const roadSegments = [
+            // Central Spine (East Fort -> Palayam -> Bypass)
+            { x: 0, z: -70, w: 20, l: 380, rot: 0 },
+            // East Fort Circle & Temple road
+            { x: 0, z: 120, w: 18, l: 150, rot: Math.PI / 2 },
+            // Kovalam / Vizhinjam Coastal link
+            { x: -150, z: 150, w: 18, l: 280, rot: Math.PI / 4 },
+            // Kanakakunnu / Palayam Crossway
+            { x: 45, z: 0, w: 18, l: 190, rot: Math.PI / 2 },
+            // Technopark / Greenfield branch
+            { x: -140, z: -250, w: 18, l: 230, rot: Math.PI / 2 },
+            // Ponmudi Foothills highway
+            { x: 120, z: -100, w: 16, l: 190, rot: -Math.PI / 5 }
+        ];
+
+        roadSegments.forEach(seg => {
+            const geo = new THREE.PlaneGeometry(seg.w, seg.l);
+            geo.rotateX(-Math.PI / 2);
+            const mesh = new THREE.Mesh(geo, roadMat);
+            mesh.position.set(seg.x, 0.08, seg.z);
+            mesh.rotation.y = seg.rot;
+            mesh.receiveShadow = true;
+            scene.add(mesh);
+        });
+
+        // Zebra Pedestrian Crossing at Palayam & East Fort
+        createZebraCrossing(0, 0, 18, 9);
+        createZebraCrossing(0, 120, 18, 9);
+    }
+
+    function createZebraCrossing(x, z, w, l) {
+        const group = new THREE.Group();
+        group.position.set(x, 0.1, z);
+        const stripeMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+        for (let i = -w / 2 + 1.6; i < w / 2; i += 3.2) {
+            const stripe = new THREE.Mesh(new THREE.PlaneGeometry(1.6, l), stripeMat);
+            stripe.rotation.x = -Math.PI / 2;
+            stripe.position.set(i, 0, 0);
+            group.add(stripe);
+        }
+        scene.add(group);
+    }
+
+    function createElevatedFlyover() {
+        const flyoverGroup = new THREE.Group();
+        flyoverGroup.position.set(-55, 0, -100);
+        flyoverGroup.rotation.y = Math.PI * 0.14;
+
+        const deckLength = 250;
+        const flyoverHeight = 7.5;
+        const deckWidth = 14;
+
+        const concreteMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
+        const asphaltMat = new THREE.MeshLambertMaterial({ color: 0x1e293b });
+        const railMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
+
+        // Elevated Highway Deck
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(deckWidth, 1.2, deckLength), concreteMat);
+        deck.position.set(0, flyoverHeight, 0);
+        deck.castShadow = true;
+        deck.receiveShadow = true;
+        flyoverGroup.add(deck);
+
+        // Deck Road Top
+        const road = new THREE.Mesh(new THREE.PlaneGeometry(deckWidth - 1, deckLength), asphaltMat);
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(0, flyoverHeight + 0.62, 0);
+        flyoverGroup.add(road);
+
+        // Guard rails
+        [-deckWidth / 2 + 0.35, deckWidth / 2 - 0.35].forEach(ox => {
+            const rail = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, deckLength), railMat);
+            rail.position.set(ox, flyoverHeight + 1.2, 0);
+            flyoverGroup.add(rail);
+        });
+
+        // Elevated Ramps at both ends
+        const rampLen = 60;
+        [-deckLength / 2 - rampLen / 2, deckLength / 2 + rampLen / 2].forEach((zPos, idx) => {
+            const rotX = idx === 0 ? Math.atan2(flyoverHeight, rampLen) : -Math.atan2(flyoverHeight, rampLen);
+            const ramp = new THREE.Mesh(new THREE.BoxGeometry(deckWidth, 1.1, rampLen + 4), concreteMat);
+            ramp.position.set(0, flyoverHeight / 2, zPos);
+            ramp.rotation.x = rotX;
+            ramp.castShadow = true;
+            flyoverGroup.add(ramp);
+        });
+
+        // Heavy Piers
+        for (let z = -deckLength / 2 + 25; z <= deckLength / 2 - 25; z += 35) {
+            const pier = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2.0, flyoverHeight, 16), concreteMat);
+            pier.position.set(0, flyoverHeight / 2, z);
+            pier.castShadow = true;
+            flyoverGroup.add(pier);
+            colliders.push({ type: 'cylinder', x: flyoverGroup.position.x, z: flyoverGroup.position.z + z, radius: 2.2 });
+        }
+
+        scene.add(flyoverGroup);
+    }
+
+    function createPadmanabhaswamyAndEastFort() {
+        const group = new THREE.Group();
+        group.position.set(0, 0, 140);
+
+        const stoneTex = ProceduralTextures.createDravidianGopuramStone();
+        stoneTex.wrapS = THREE.RepeatWrapping;
+        stoneTex.wrapT = THREE.RepeatWrapping;
+        stoneTex.repeat.set(2, 2);
+        const stoneMat = new THREE.MeshLambertMaterial({ map: stoneTex });
+        const goldMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.85, roughness: 0.25 });
+
+        // 7-TIER DRAVIDIAN GOPURAM TOWER
+        const tiers = 7;
+        let baseW = 26;
+        let baseD = 17;
+        let currentH = 0;
+
+        for (let i = 0; i < tiers; i++) {
+            const tierH = 4.2 - i * 0.26;
+            const w = baseW * Math.pow(0.88, i);
+            const d = baseD * Math.pow(0.88, i);
+
+            const tierMesh = new THREE.Mesh(new THREE.BoxGeometry(w, tierH, d), stoneMat);
+            tierMesh.position.set(0, currentH + tierH / 2, 0);
+            tierMesh.castShadow = true;
+            group.add(tierMesh);
+
+            const cornice = new THREE.Mesh(new THREE.BoxGeometry(w + 1.4, 0.6, d + 1.4), stoneMat);
+            cornice.position.set(0, currentH + tierH, 0);
+            group.add(cornice);
+
+            currentH += tierH + 0.6;
+        }
+
+        // Golden Kalasams (Finials on Temple Summit)
+        for (let k = -6; k <= 6; k += 2) {
+            const kalasam = new THREE.Mesh(new THREE.ConeGeometry(0.42, 2.2, 8), goldMat);
+            kalasam.position.set(k, currentH + 1.1, 0);
+            group.add(kalasam);
+        }
+
+        // Entrance Mandapam
+        const entrance = new THREE.Mesh(new THREE.BoxGeometry(9, 6, 8), stoneMat);
+        entrance.position.set(0, 3, 9);
+        group.add(entrance);
+
+        // PADMATHEERTHAM SACRED TEMPLE POND (Stepped water tank)
+        const pondGroup = new THREE.Group();
+        pondGroup.position.set(44, 0, -12);
+
+        const pondBorder = new THREE.Mesh(new THREE.BoxGeometry(42, 1.2, 42), new THREE.MeshLambertMaterial({ color: 0x64748b }));
+        pondBorder.position.set(0, 0.6, 0);
+        pondGroup.add(pondBorder);
+
+        const pondWater = new THREE.Mesh(
+            new THREE.PlaneGeometry(38, 38),
+            new THREE.MeshStandardMaterial({ color: 0x064e3b, roughness: 0.15, metalness: 0.2 })
+        );
+        pondWater.rotation.x = -Math.PI / 2;
+        pondWater.position.set(0, 0.2, 0);
+        pondGroup.add(pondWater);
+
+        const pondKiosk = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.4, 4, 8), stoneMat);
+        pondKiosk.position.set(0, 2, 0);
+        pondGroup.add(pondKiosk);
+        group.add(pondGroup);
+
+        // EAST FORT HERITAGE ARCH GATE
+        const arch = new THREE.Group();
+        arch.position.set(-30, 0, -25);
+        const whiteFortMat = new THREE.MeshLambertMaterial({ color: 0xe2e8f0 });
+
+        const p1 = new THREE.Mesh(new THREE.BoxGeometry(4.5, 12, 4.5), whiteFortMat);
+        p1.position.set(-8, 6, 0);
+        const p2 = new THREE.Mesh(new THREE.BoxGeometry(4.5, 12, 4.5), whiteFortMat);
+        p2.position.set(8, 6, 0);
+        const archTop = new THREE.Mesh(new THREE.BoxGeometry(21, 3.8, 5), whiteFortMat);
+        archTop.position.set(0, 13, 0);
+        arch.add(p1, p2, archTop);
+        group.add(arch);
+
+        // Bilingual Signboard
+        const signTex = ProceduralTextures.createMalayalamSign('ശ്രീ പത്മനാഭസ്വാമി ക്ഷേത്രം', 'PADMANABHASWAMY TEMPLE & EAST FORT', '#78350f');
+        const signMesh = new THREE.Mesh(new THREE.PlaneGeometry(15, 4.5), new THREE.MeshBasicMaterial({ map: signTex }));
+        signMesh.position.set(0, 8.5, 20);
+        group.add(signMesh);
+
+        scene.add(group);
+        colliders.push({ type: 'box', x: group.position.x, z: group.position.z, sizeX: 32, sizeZ: 24 });
+        colliders.push({ type: 'box', x: group.position.x + 44, z: group.position.z - 12, sizeX: 42, sizeZ: 42 });
+
+        landmarkZones.push({
+            id: 'eastfort',
+            name: 'PADMANABHASWAMY TEMPLE & EAST FORT',
+            icon: '🛕',
+            x: group.position.x,
+            z: group.position.z,
+            radius: 54
+        });
+    }
+
+    function createVizhinjamPort() {
+        const group = new THREE.Group();
+        group.position.set(-310, 0, 300);
+
+        const quayMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
+        const pier = new THREE.Mesh(new THREE.BoxGeometry(110, 4.5, 85), quayMat);
+        pier.position.set(0, 1.8, 0);
+        pier.receiveShadow = true;
+        group.add(pier);
+
+        // Breakwater Tetrapods
+        const tetraMat = new THREE.MeshLambertMaterial({ color: 0x64748b });
+        for (let i = -48; i <= 48; i += 7) {
+            const tet = new THREE.Mesh(new THREE.DodecahedronGeometry(2.3, 0), tetraMat);
+            tet.position.set(i + (Math.random() - 0.5) * 3, 0.4, 44);
+            group.add(tet);
+        }
+
+        // Giant Red & White STS Container Cranes
+        const redMat = new THREE.MeshLambertMaterial({ color: 0xdc2626 });
+        const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+
+        [-24, 24].forEach(cx => {
+            const crane = new THREE.Group();
+            crane.position.set(cx, 4, 24);
+
+            [-6, 6].forEach(lx => {
+                const legF = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 38, 8), redMat);
+                legF.position.set(lx, 19, 6);
+                const legB = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 38, 8), whiteMat);
+                legB.position.set(lx, 19, -6);
+                crane.add(legF, legB);
+            });
+
+            const boom = new THREE.Mesh(new THREE.BoxGeometry(15, 3, 54), redMat);
+            boom.position.set(0, 38, 12);
+            crane.add(boom);
+
+            group.add(crane);
+        });
+
+        // Stacks of Freight Containers
+        const contColors = [0x0284c7, 0x16a34a, 0xdc2626, 0xeab308, 0x9333ea];
+        for (let row = -35; row <= 35; row += 16) {
+            for (let col = -28; col <= 0; col += 12) {
+                const stackH = Math.floor(Math.random() * 3) + 1;
+                for (let h = 0; h < stackH; h++) {
+                    const cMat = new THREE.MeshLambertMaterial({ color: contColors[Math.floor(Math.random() * contColors.length)] });
+                    const cont = new THREE.Mesh(new THREE.BoxGeometry(12, 3.6, 5), cMat);
+                    cont.position.set(row, 4.1 + 1.8 + h * 3.6, col);
+                    cont.castShadow = true;
+                    group.add(cont);
+                }
+            }
+        }
+
+        const signTex = ProceduralTextures.createMalayalamSign('വിഴിഞ്ഞം അന്താരാഷ്ട്ര തുറമുഖം', 'VIZHINJAM INTERNATIONAL SEAPORT', '#1e3a8a');
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(16, 5), new THREE.MeshBasicMaterial({ map: signTex }));
+        sign.position.set(0, 10, -40);
+        group.add(sign);
+
+        scene.add(group);
+        colliders.push({ type: 'box', x: group.position.x, z: group.position.z, sizeX: 110, sizeZ: 85 });
+
+        landmarkZones.push({
+            id: 'vizhinjam',
+            name: 'VIZHINJAM INTERNATIONAL SEAPORT',
+            icon: '🚢',
+            x: group.position.x,
+            z: group.position.z,
+            radius: 70
+        });
+    }
+
+    function createKovalamLighthouse() {
+        const group = new THREE.Group();
+        group.position.set(-180, 0, 230);
+
+        // Rocky Cliff
+        const cliff = new THREE.Mesh(new THREE.CylinderGeometry(18, 26, 12, 12), new THREE.MeshLambertMaterial({ color: 0x57534e }));
+        cliff.position.set(0, 6, 0);
+        group.add(cliff);
+
+        // Iconic Red & White Kovalam Lighthouse
+        const towerH = 32;
+        const radius = 3.6;
+        const bands = 8;
+        const bandH = towerH / bands;
+
+        for (let b = 0; b < bands; b++) {
+            const isRed = b % 2 === 0;
+            const bMat = new THREE.MeshLambertMaterial({ color: isRed ? 0xef4444 : 0xf8fafc });
+            const bandMesh = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.88, radius, bandH, 18), bMat);
+            bandMesh.position.set(0, 12 + b * bandH + bandH / 2, 0);
+            bandMesh.castShadow = true;
+            group.add(bandMesh);
+        }
+
+        // Lantern & Dome
+        const lantern = new THREE.Mesh(
+            new THREE.CylinderGeometry(3.2, 3.2, 4.4, 16),
+            new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1, transparent: true, opacity: 0.85 })
+        );
+        lantern.position.set(0, 12 + towerH + 2.2, 0);
+        group.add(lantern);
+
+        const dome = new THREE.Mesh(new THREE.SphereGeometry(3.3, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: 0xef4444 }));
+        dome.position.set(0, 12 + towerH + 4.4, 0);
+        group.add(dome);
+
+        // Rotating Beacon Light
+        const spot = new THREE.SpotLight(0xfef08a, 2.8, 140, Math.PI / 6, 0.4);
+        spot.position.set(0, 12 + towerH + 2.2, 0);
+        spot.target.position.set(60, 12 + towerH + 2.2, 60);
+        group.add(spot);
+        group.add(spot.target);
+
+        animatedOceanList.push({
+            update: (time) => {
+                const angle = time * 1.6;
+                spot.target.position.x = Math.cos(angle) * 70;
+                spot.target.position.z = Math.sin(angle) * 70;
+            }
+        });
+
+        const signTex = ProceduralTextures.createMalayalamSign('കോവളം ലൈറ്റ്ഹൗസ് ബീച്ച്', 'KOVALAM BEACH & LIGHTHOUSE', '#065f46');
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.5), new THREE.MeshBasicMaterial({ map: signTex }));
+        sign.position.set(0, 7, 24);
+        group.add(sign);
+
+        scene.add(group);
+        colliders.push({ type: 'cylinder', x: group.position.x, z: group.position.z, radius: 20 });
+
+        landmarkZones.push({
+            id: 'kovalam',
+            name: 'KOVALAM BEACH & LIGHTHOUSE',
+            icon: '🏖️',
+            x: group.position.x,
+            z: group.position.z,
+            radius: 65
+        });
+    }
+
+    function createPonmudiHill() {
+        const group = new THREE.Group();
+        group.position.set(220, 0, -220);
+
+        // Stepped Tea Garden Terraces
+        const teaMat = new THREE.MeshLambertMaterial({ color: 0x16a34a });
+        for (let h = 4; h <= 34; h += 6) {
+            const terrace = new THREE.Mesh(new THREE.CylinderGeometry(110 - h * 2.2, 116 - h * 2.2, 3.4, 16), teaMat);
+            terrace.position.set(0, h, 0);
+            terrace.receiveShadow = true;
+            group.add(terrace);
+        }
+
+        // Summit Viewpoint Pavilion Gazebo
+        const summitH = 44;
+        const pavilion = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.2, 4.2, 8), new THREE.MeshLambertMaterial({ color: 0xd97706 }));
+        pavilion.position.set(0, summitH + 2, 0);
+        group.add(pavilion);
+
+        const pavRoof = new THREE.Mesh(new THREE.ConeGeometry(7.2, 4, 8), new THREE.MeshLambertMaterial({ color: 0x991b1b }));
+        pavRoof.position.set(0, summitH + 6, 0);
+        group.add(pavRoof);
+
+        // Floating Hill Station Mist / Clouds
+        const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
+        const cloudGroup = new THREE.Group();
+        for (let i = 0; i < 14; i++) {
+            const cl = new THREE.Mesh(new THREE.DodecahedronGeometry(7, 1), cloudMat);
+            cl.position.set((Math.random() - 0.5) * 100, summitH + (Math.random() - 0.5) * 10, (Math.random() - 0.5) * 100);
+            cloudGroup.add(cl);
+        }
+        group.add(cloudGroup);
+
+        animatedOceanList.push({
+            update: (time) => {
+                cloudGroup.rotation.y = time * 0.02;
+            }
+        });
+
+        const signTex = ProceduralTextures.createMalayalamSign('പൊൻമുടി മലനിരകൾ', 'PONMUDI HILL STATION', '#1e3a8a');
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(16, 4.5), new THREE.MeshBasicMaterial({ map: signTex }));
+        sign.position.set(-25, 8, 50);
+        group.add(sign);
+
+        scene.add(group);
+
+        landmarkZones.push({
+            id: 'ponmudi',
+            name: 'PONMUDI HILL STATION',
+            icon: '⛰️',
+            x: group.position.x,
+            z: group.position.z,
+            radius: 75
+        });
+    }
+
+    function createKanakakunnuPalace() {
+        const group = new THREE.Group();
+        group.position.set(60, 0, -30);
+
+        const wallMat = new THREE.MeshLambertMaterial({ color: 0x9a3412 }); // Laterite red brick
+        const roofMat = new THREE.MeshLambertMaterial({ color: 0x7f1d1d }); // Pitched clay tiles
+        const pillarMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+
+        const plinth = new THREE.Mesh(new THREE.BoxGeometry(44, 2, 32), new THREE.MeshLambertMaterial({ color: 0x475569 }));
+        plinth.position.set(0, 1, 0);
+        group.add(plinth);
+
+        const hall = new THREE.Mesh(new THREE.BoxGeometry(36, 9, 24), wallMat);
+        hall.position.set(0, 6.5, 0);
+        hall.castShadow = true;
+        group.add(hall);
+
+        // Traditional Kerala Pitched Gable Roof
+        const roofGeo = new THREE.ConeGeometry(24, 7, 4);
+        roofGeo.rotateY(Math.PI / 4);
+        const roof = new THREE.Mesh(roofGeo, roofMat);
+        roof.scale.set(1.1, 1, 0.75);
+        roof.position.set(0, 14.2, 0);
+        group.add(roof);
+
+        // White pillars veranda
+        for (let p = -14; p <= 14; p += 7) {
+            const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 9, 12), pillarMat);
+            pil.position.set(p, 6.5, 13);
+            group.add(pil);
+        }
+
+        const signTex = ProceduralTextures.createMalayalamSign('കനകക്കുന്ന് കൊട്ടാരം', 'KANAKAKUNNU PALACE', '#831843');
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(14, 4.4), new THREE.MeshBasicMaterial({ map: signTex }));
+        sign.position.set(0, 8, 17);
+        group.add(sign);
+
+        scene.add(group);
+        colliders.push({ type: 'box', x: group.position.x, z: group.position.z, sizeX: 44, sizeZ: 32 });
+
+        landmarkZones.push({
+            id: 'kanakakunnu',
+            name: 'KANAKAKUNNU PALACE',
+            icon: '🏰',
+            x: group.position.x,
+            z: group.position.z,
+            radius: 50
+        });
+    }
+
+    function createTechnoparkAndLuLu() {
+        // TECHNOPARK IT TOWERS
+        const techGroup = new THREE.Group();
+        techGroup.position.set(-190, 0, -210);
+
+        const glassMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.85, roughness: 0.15 });
+        const tower1 = new THREE.Mesh(new THREE.CylinderGeometry(14, 16, 56, 24), glassMat);
+        tower1.position.set(0, 28, 0);
+        tower1.castShadow = true;
+        techGroup.add(tower1);
+
+        const tower2 = new THREE.Mesh(new THREE.BoxGeometry(20, 44, 20), glassMat);
+        tower2.position.set(26, 22, 10);
+        tower2.castShadow = true;
+        techGroup.add(tower2);
+
+        const signTex = ProceduralTextures.createMalayalamSign('ടെക്നോപാർക്ക് ട്രിവാൻഡ്രം', 'TECHNOPARK KERALA', '#0f766e');
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(16, 4.5), new THREE.MeshBasicMaterial({ map: signTex }));
+        sign.position.set(10, 8, 28);
+        techGroup.add(sign);
+
+        scene.add(techGroup);
+        colliders.push({ type: 'cylinder', x: techGroup.position.x, z: techGroup.position.z, radius: 18 });
+
+        landmarkZones.push({
+            id: 'technopark',
+            name: 'TECHNOPARK TRIVANDRUM',
+            icon: '💻',
+            x: techGroup.position.x,
+            z: techGroup.position.z,
+            radius: 65
+        });
+
+        // LULU MALL TRIVANDRUM
+        const luluGroup = new THREE.Group();
+        luluGroup.position.set(-110, 0, -270);
+
+        const mall = new THREE.Mesh(new THREE.BoxGeometry(70, 18, 42), new THREE.MeshLambertMaterial({ color: 0xf1f5f9 }));
+        mall.position.set(0, 9, 0);
+        mall.castShadow = true;
+        luluGroup.add(mall);
+
+        const logoBand = new THREE.Mesh(new THREE.BoxGeometry(68, 3.5, 42.4), new THREE.MeshLambertMaterial({ color: 0xb91c1c }));
+        logoBand.position.set(0, 15, 0);
+        luluGroup.add(logoBand);
+
+        const luluSignTex = ProceduralTextures.createMalayalamSign('ലുലു മാൾ ട്രിവാൻഡ്രം', 'LULU INTERNATIONAL MALL', '#991b1b');
+        const luluSign = new THREE.Mesh(new THREE.PlaneGeometry(20, 5), new THREE.MeshBasicMaterial({ map: luluSignTex }));
+        luluSign.position.set(0, 15, 22.5);
+        luluGroup.add(luluSign);
+
+        scene.add(luluGroup);
+        colliders.push({ type: 'box', x: luluGroup.position.x, z: luluGroup.position.z, sizeX: 72, sizeZ: 44 });
+
+        landmarkZones.push({
+            id: 'lulumall',
+            name: 'LULU MALL TRIVANDRUM',
+            icon: '🛍️',
+            x: luluGroup.position.x,
+            z: luluGroup.position.z,
+            radius: 65
+        });
+    }
+
+    function createGreenfieldStadium() {
+        const group = new THREE.Group();
+        group.position.set(-30, 0, -340);
+
+        const outerBowl = new THREE.Mesh(new THREE.CylinderGeometry(52, 44, 16, 32, 1, true), new THREE.MeshLambertMaterial({ color: 0xe2e8f0 }));
+        outerBowl.position.set(0, 8, 0);
+        group.add(outerBowl);
+
+        const pitch = new THREE.Mesh(new THREE.CylinderGeometry(33, 33, 0.4, 32), new THREE.MeshLambertMaterial({ color: 0x16a34a }));
+        pitch.position.set(0, 0.2, 0);
+        group.add(pitch);
+
+        // 4 Floodlight Masts
+        for (let i = 0; i < 4; i++) {
+            const angle = (i * Math.PI) / 2 + Math.PI / 4;
+            const mx = Math.cos(angle) * 56;
+            const mz = Math.sin(angle) * 56;
+
+            const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, 38, 8), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
+            mast.position.set(mx, 19, mz);
+            group.add(mast);
+
+            const lamps = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 2), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+            lamps.position.set(mx, 38, mz);
+            lamps.lookAt(0, 5, 0);
+            group.add(lamps);
+        }
+
+        const stadiumSignTex = ProceduralTextures.createMalayalamSign('ഗ്രീൻഫീൽഡ് സ്റ്റേഡിയം', 'GREENFIELD INTL STADIUM', '#15803d');
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(18, 4.6), new THREE.MeshBasicMaterial({ map: stadiumSignTex }));
+        sign.position.set(0, 10, 54);
+        group.add(sign);
+
+        scene.add(group);
+        colliders.push({ type: 'cylinder', x: group.position.x, z: group.position.z, radius: 52 });
+
+        landmarkZones.push({
+            id: 'greenfield',
+            name: 'GREENFIELD STADIUM KARYAVATTOM',
+            icon: '🏟️',
+            x: group.position.x,
+            z: group.position.z,
+            radius: 70
+        });
+    }
+
+    function createKeralaDressing() {
+        // Traditional Chayakkada (ചായക്കട)
+        createTeaStall(-16, 0, 70, 0);
+        createTeaStall(22, 0, -65, Math.PI);
+
+        // Coconut Palms along roads and coast
+        const palms = [
+            [-16, 40], [16, 40], [-18, 90], [24, 90],
+            [-140, 200], [-160, 220], [-130, 250], [-210, 210],
+            [-45, -20], [75, 40], [90, -40], [-110, -210],
+            [120, -180], [150, -210], [180, -230]
+        ];
+        palms.forEach(p => createCoconutTree(p[0], p[1]));
+    }
+
+    function createTeaStall(x, y, z, rot) {
+        const stall = new THREE.Group();
+        stall.position.set(x, y, z);
+        stall.rotation.y = rot;
+
+        const body = new THREE.Mesh(new THREE.BoxGeometry(6, 3.5, 4), new THREE.MeshLambertMaterial({ color: 0x78350f }));
+        body.position.set(0, 1.75, 0);
+        stall.add(body);
+
+        const roof = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.3, 5.2), new THREE.MeshLambertMaterial({ color: 0x0284c7 }));
+        roof.position.set(0, 3.6, 0.4);
+        roof.rotation.x = 0.2;
+        stall.add(roof);
+
+        // Pazhampori (Banana fritters) shelf
+        const snackCase = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 1), new THREE.MeshStandardMaterial({ color: 0xfde047 }));
+        snackCase.position.set(-1.2, 2.2, 1.8);
+        stall.add(snackCase);
+
+        // Tea Samovar
+        const samovar = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 0.9, 12), new THREE.MeshStandardMaterial({ color: 0xd97706, metalness: 0.9 }));
+        samovar.position.set(1.4, 2.2, 1.8);
+        stall.add(samovar);
+
+        const signTex = ProceduralTextures.createMalayalamSign('നാടൻ ചായക്കട', 'KERALA TEA STALL & SNACKS', '#b45309');
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 1.5), new THREE.MeshBasicMaterial({ map: signTex }));
+        sign.position.set(0, 3.4, 2.1);
+        stall.add(sign);
+
+        scene.add(stall);
+        colliders.push({ type: 'box', x: x, z: z, sizeX: 6.5, sizeZ: 4.5 });
+    }
+
+    function createCoconutTree(x, z) {
+        const palm = new THREE.Group();
+        palm.position.set(x, getGroundElevation(x, z), z);
+
+        const trunkMat = new THREE.MeshLambertMaterial({ color: 0x854d0e });
+        const leafMat = new THREE.MeshLambertMaterial({ color: 0x15803d, side: THREE.DoubleSide });
+
+        const bend = (Math.random() - 0.5) * 1.5;
+        let cy = 0, cx = 0;
+
+        for (let i = 0; i < 4; i++) {
+            const h = 3.6;
+            const part = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.48, h, 8), trunkMat);
+            part.position.set(cx, cy + h / 2, 0);
+            part.rotation.z = bend * 0.12;
+            palm.add(part);
+            cy += h * 0.96;
+            cx += bend * 0.4;
+        }
+
+        const crown = new THREE.Group();
+        crown.position.set(cx, cy, 0);
+
+        for (let f = 0; f < 8; f++) {
+            const angle = (f / 8) * Math.PI * 2;
+            const frondGeo = new THREE.PlaneGeometry(1.6, 6);
+            frondGeo.translate(0, 3, 0);
+            const frond = new THREE.Mesh(frondGeo, leafMat);
+            frond.rotation.y = angle;
+            frond.rotation.x = Math.PI / 3 + Math.random() * 0.2;
+            crown.add(frond);
+        }
+
+        palm.add(crown);
+        scene.add(palm);
+        colliders.push({ type: 'cylinder', x: x, z: z, radius: 0.9 });
+    }
+
+    function assembleVehicleMesh(type) {
+        const group = new THREE.Group();
+
+        if (type === 'auto') {
+            // KERALA 3-WHEELER AUTO-RICKSHAW (Yellow Hood, Green Body)
+            const yellowMat = new THREE.MeshLambertMaterial({ color: 0xfacc15 });
+            const greenMat = new THREE.MeshLambertMaterial({ color: 0x166534 });
+            const blackMat = new THREE.MeshLambertMaterial({ color: 0x1f2937 });
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.0, 2.8), greenMat);
+            body.position.set(0, 0.8, 0);
+            group.add(body);
+
+            const roof = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 2.6, 12, 1, false, 0, Math.PI), yellowMat);
+            roof.rotation.z = Math.PI / 2;
+            roof.rotation.y = Math.PI / 2;
+            roof.position.set(0, 1.8, -0.1);
+            group.add(roof);
+
+            const wGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.3, 16);
+            wGeo.rotateZ(Math.PI / 2);
+
+            const fWheel = new THREE.Mesh(wGeo, blackMat);
+            fWheel.position.set(0, 0.38, 1.2);
+            const rWheel1 = new THREE.Mesh(wGeo, blackMat);
+            rWheel1.position.set(-0.95, 0.38, -0.8);
+            const rWheel2 = new THREE.Mesh(wGeo, blackMat);
+            rWheel2.position.set(0.95, 0.38, -0.8);
+            group.add(fWheel, rWheel1, rWheel2);
+
+            group.userData.wheels = [fWheel, rWheel1, rWheel2];
+        }
+        else if (type === 'ksrtc') {
+            // KSRTC FAST PASSENGER BUS ("Aana Vandi" - Red & Yellow Livery)
+            const redMat = new THREE.MeshLambertMaterial({ color: 0x991b1b });
+            const yellowMat = new THREE.MeshLambertMaterial({ color: 0xfef08a });
+            const blackMat = new THREE.MeshLambertMaterial({ color: 0x111827 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1 });
+
+            const lower = new THREE.Mesh(new THREE.BoxGeometry(2.8, 1.4, 9.6), redMat);
+            lower.position.set(0, 1.0, 0);
+            const upper = new THREE.Mesh(new THREE.BoxGeometry(2.78, 1.5, 9.5), yellowMat);
+            upper.position.set(0, 2.45, 0);
+            group.add(lower, upper);
+
+            const win = new THREE.Mesh(new THREE.BoxGeometry(2.85, 0.7, 7.8), glassMat);
+            win.position.set(0, 2.5, -0.4);
+            group.add(win);
+
+            // Front Destination Board
+            const boardTex = ProceduralTextures.createMalayalamSign('കെ.എസ്.ആർ.ടി.സി ഫാസ്റ്റ് പാസഞ്ചർ', 'KSRTC FAST PASSENGER', '#991b1b');
+            const board = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.6), new THREE.MeshBasicMaterial({ map: boardTex }));
+            board.position.set(0, 3.0, 4.82);
+            group.add(board);
+
+            const wGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.45, 16);
+            wGeo.rotateZ(Math.PI / 2);
+            const wheels = [];
+            [[-1.4, 3.0], [1.4, 3.0], [-1.4, -2.6], [1.4, -2.6], [-1.4, -3.8], [1.4, -3.8]].forEach(pos => {
+                const w = new THREE.Mesh(wGeo, blackMat);
+                w.position.set(pos[0], 0.55, pos[1]);
+                group.add(w);
+                wheels.push(w);
+            });
+            group.userData.wheels = wheels;
+        }
+        else if (type === 'suv') {
+            // WHITE KERALA SUV
+            const whiteMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+            const blackMat = new THREE.MeshLambertMaterial({ color: 0x111827 });
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x60a5fa, roughness: 0.1 });
+
+            const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.9, 4.8), whiteMat);
+            body.position.set(0, 0.75, 0);
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.85, 2.8), glassMat);
+            cabin.position.set(0, 1.55, -0.3);
+            group.add(body, cabin);
+
+            const wGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.35, 16);
+            wGeo.rotateZ(Math.PI / 2);
+            const wheels = [];
+            [[-1.15, 1.5], [1.15, 1.5], [-1.15, -1.5], [1.15, -1.5]].forEach(pos => {
+                const w = new THREE.Mesh(wGeo, blackMat);
+                w.position.set(pos[0], 0.42, pos[1]);
+                group.add(w);
+                wheels.push(w);
+            });
+            group.userData.wheels = wheels;
+        }
+        else if (type === 'scooter') {
+            // MOTORCYCLE / SCOOTER
+            const tankMat = new THREE.MeshLambertMaterial({ color: 0x991b1b });
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.8 });
+            const blackMat = new THREE.MeshLambertMaterial({ color: 0x111827 });
+
+            const tank = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.9), tankMat);
+            tank.position.set(0, 0.9, 0.1);
+            const seat = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.18, 0.8), metalMat);
+            seat.position.set(0, 0.85, -0.5);
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.08, 0.08), metalMat);
+            handle.position.set(0, 1.15, 0.6);
+            group.add(tank, seat, handle);
+
+            const wGeo = new THREE.CylinderGeometry(0.38, 0.38, 0.16, 16);
+            wGeo.rotateZ(Math.PI / 2);
+            const fW = new THREE.Mesh(wGeo, blackMat);
+            fW.position.set(0, 0.38, 0.9);
+            const rW = new THREE.Mesh(wGeo, blackMat);
+            rW.position.set(0, 0.38, -0.9);
+            group.add(fW, rW);
+            group.userData.wheels = [fW, rW];
+        }
+
+        return group;
+    }
+
+    function spawnFleet() {
+        const fleetConfigs = [
+            { type: 'auto', name: 'Kerala Auto-Rickshaw', x: 6, z: 110, rot: 0, maxSpeed: 18, accel: 15, isBus: false },
+            { type: 'auto', name: 'Kovalam Beach Auto', x: -160, z: 195, rot: Math.PI / 3, maxSpeed: 18, accel: 15, isBus: false },
+            { type: 'ksrtc', name: 'KSRTC Fast Passenger', x: 25, z: 115, rot: -Math.PI / 2, maxSpeed: 15, accel: 8, isBus: true },
+            { type: 'suv', name: 'White Kerala SUV', x: -130, z: -245, rot: Math.PI, maxSpeed: 23, accel: 19, isBus: false },
+            { type: 'scooter', name: 'Trivandrum Motorcycle', x: 50, z: -15, rot: 0, maxSpeed: 22, accel: 20, isBus: false }
+        ];
+
+        fleetConfigs.forEach((cfg, idx) => {
+            const mesh = assembleVehicleMesh(cfg.type);
+            mesh.position.set(cfg.x, getGroundElevation(cfg.x, cfg.z), cfg.z);
+            mesh.rotation.y = cfg.rot;
+            mesh.castShadow = true;
+            scene.add(mesh);
+
+            drivableVehicles.push({
+                id: idx,
+                type: cfg.type,
+                name: cfg.name,
+                mesh: mesh,
+                speed: 0,
+                maxSpeed: cfg.maxSpeed,
+                accel: cfg.accel,
+                turnSpeed: cfg.type === 'ksrtc' ? 1.5 : (cfg.type === 'auto' ? 2.6 : 2.2),
+                isBus: cfg.isBus
+            });
+        });
+    }
+
+    function createPlayer() {
+        const group = new THREE.Group();
+        group.position.set(0, 0, 115);
+
+        const skinMat = new THREE.MeshLambertMaterial({ color: 0x8d5b4c });
+        const shirtMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc }); // Crisp white Kerala Jubba
+        const munduMat = new THREE.MeshLambertMaterial({ color: 0xfef08a }); // Kasavu Mundu
+        const hairMat = new THREE.MeshLambertMaterial({ color: 0x18181b });
+
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.4), shirtMat);
+        torso.position.set(0, 1.25, 0);
+        torso.castShadow = true;
+        group.add(torso);
+
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.4), skinMat);
+        head.position.set(0, 1.95, 0);
+        group.add(head);
+
+        const hair = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.2, 0.44), hairMat);
+        hair.position.set(0, 2.1, 0);
+        group.add(hair);
+
+        const armGeo = new THREE.BoxGeometry(0.2, 0.7, 0.2);
+        const lArm = new THREE.Mesh(armGeo, shirtMat);
+        lArm.position.set(-0.48, 1.2, 0);
+        const rArm = new THREE.Mesh(armGeo, shirtMat);
+        rArm.position.set(0.48, 1.2, 0);
+        group.add(lArm, rArm);
+
+        const legGeo = new THREE.BoxGeometry(0.26, 0.8, 0.26);
+        const lLeg = new THREE.Mesh(legGeo, munduMat);
+        lLeg.position.set(-0.2, 0.4, 0);
+        const rLeg = new THREE.Mesh(legGeo, munduMat);
+        rLeg.position.set(0.2, 0.4, 0);
+        group.add(lLeg, rLeg);
+
+        scene.add(group);
+
+        player = {
+            mesh: group,
+            lArm: lArm,
+            rArm: rArm,
+            lLeg: lLeg,
+            rLeg: rLeg,
+            vy: 0,
+            isGrounded: true,
+            walkCycle: 0
+        };
+    }
+
+    function spawnTrafficAndWalkers() {
+        // AI Traffic along main road
+        ['auto', 'suv', 'auto', 'suv'].forEach((type, i) => {
+            const mesh = assembleVehicleMesh(type);
+            const zPos = 90 - i * 85;
+            mesh.position.set(i % 2 === 0 ? -5 : 5, 0, zPos);
+            scene.add(mesh);
+
+            npcTraffic.push({
+                mesh: mesh,
+                speed: 8 + Math.random() * 4,
+                direction: i % 2 === 0 ? -1 : 1
+            });
+        });
+
+        // AI Pedestrians
+        const pedColors = [0xd97706, 0x0284c7, 0x16a34a, 0xe11d48, 0xf59e0b];
+        for (let p = 0; p < 12; p++) {
+            const pedGroup = new THREE.Group();
+            const px = (Math.random() - 0.5) * 16 + (Math.random() > 0.5 ? 9 : -9);
+            const pz = (Math.random() - 0.5) * 180;
+            pedGroup.position.set(px, 0, pz);
+
+            const mat = new THREE.MeshLambertMaterial({ color: pedColors[p % pedColors.length] });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.4, 0.35), mat);
+            body.position.set(0, 0.7, 0);
+            pedGroup.add(body);
+
+            scene.add(pedGroup);
+            npcPedestrians.push({
+                mesh: pedGroup,
+                speed: 1.6 + Math.random() * 1.4,
+                dirZ: Math.random() > 0.5 ? 1 : -1,
+                minZ: pz - 25,
+                maxZ: pz + 25
+            });
+        }
+    }
+
+    function getGroundElevation(x, z) {
+        // Ponmudi Hill Height
+        if (x > 90 && z < -60) {
+            const d = Math.hypot(x - 220, z - (-220));
+            if (d < 180) {
+                return Math.cos((d / 180) * (Math.PI / 2)) * 44;
+            }
+        }
+        // Sea basin
+        if (x < -140 && z > 60) {
+            const cd = Math.hypot(x - (-300), z - 260);
+            if (cd < 240) return -2.4;
+        }
+        return 0;
+    }
+
+    function checkCollision(x, z, radius = 1.0) {
+        for (let col of colliders) {
+            if (col.type === 'cylinder') {
+                if (Math.hypot(x - col.x, z - col.z) < col.radius + radius) return true;
+            } else if (col.type === 'box') {
+                if (Math.abs(x - col.x) < col.sizeX / 2 + radius &&
+                    Math.abs(z - col.z) < col.sizeZ / 2 + radius) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    function setupControls() {
+        // Audio & Play Button unlock
+        document.getElementById('start-btn').addEventListener('click', () => {
+            audio.init();
+            document.getElementById('start-overlay').classList.add('hidden');
+            triggerToast(landmarkZones[0]);
+        });
+
+        // Virtual Thumb Joystick Handling
+        const leftZone = document.getElementById('touch-left-zone');
+        const stickBase = document.getElementById('joystick-container');
+        const stickKnob = document.getElementById('joystick-knob');
+
+        leftZone.addEventListener('touchstart', (e) => {
+            audio.init();
+            e.preventDefault();
+            const touch = e.touches[0];
+            touchState.joystickActive = true;
+            touchState.startX = touch.clientX;
+            touchState.startY = touch.clientY;
+            touchState.inputX = 0;
+            touchState.inputY = 0;
+
+            stickBase.style.left = `${touch.clientX - 70}px`;
+            stickBase.style.top = `${touch.clientY - 70}px`;
+            stickBase.style.bottom = 'auto';
+            stickKnob.style.transform = 'translate(0px, 0px)';
+        }, { passive: false });
+
+        leftZone.addEventListener('touchmove', (e) => {
+            if (!touchState.joystickActive) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            let dx = touch.clientX - touchState.startX;
+            let dy = touch.clientY - touchState.startY;
+            const maxR = 48;
+            const dist = Math.hypot(dx, dy);
+
+            if (dist > maxR) {
+                dx = (dx / dist) * maxR;
+                dy = (dy / dist) * maxR;
+            }
+
+            touchState.inputX = dx / maxR;
+            touchState.inputY = dy / maxR;
+            stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+        }, { passive: false });
+
+        const releaseJoystick = () => {
+            touchState.joystickActive = false;
+            touchState.inputX = 0;
+            touchState.inputY = 0;
+            stickKnob.style.transform = 'translate(0px, 0px)';
+            stickBase.style.left = '20px';
+            stickBase.style.bottom = '24px';
+            stickBase.style.top = 'auto';
+        };
+        leftZone.addEventListener('touchend', releaseJoystick);
+        leftZone.addEventListener('touchcancel', releaseJoystick);
+
+        // Touch Drag Screen Camera Orbit
+        let camTouchId = null;
+        let lastCamX = 0, lastCamY = 0;
+
+        window.addEventListener('touchstart', (e) => {
+            audio.init();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                if (t.clientX > window.innerWidth * 0.4 && !t.target.closest('button')) {
+                    camTouchId = t.identifier;
+                    lastCamX = t.clientX;
+                    lastCamY = t.clientY;
+                }
+            }
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const t = e.changedTouches[i];
+                if (t.identifier === camTouchId) {
+                    const dx = t.clientX - lastCamX;
+                    const dy = t.clientY - lastCamY;
+                    lastCamX = t.clientX;
+                    lastCamY = t.clientY;
+
+                    cameraControl.theta -= dx * 0.007;
+                    cameraControl.phi = Math.max(0.12, Math.min(Math.PI / 2.3, cameraControl.phi + dy * 0.006));
+                }
+            }
+        });
+
+        window.addEventListener('touchend', (e) => {
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === camTouchId) camTouchId = null;
+            }
+        });
+
+        // Touch Action Buttons
+        bindButtonHold('btn-touch-gas', (isHeld) => { keys.forward = isHeld; });
+        bindButtonHold('btn-touch-brake', (isHeld) => {
+            if (currentVehicle) {
+                keys.backward = isHeld;
+            } else if (isHeld && player.isGrounded) {
+                player.vy = 8.5;
+                player.isGrounded = false;
+                audio.playJump();
+            }
+        });
+
+        document.getElementById('btn-touch-enter').addEventListener('click', toggleVehicleMount);
+        document.getElementById('btn-touch-horn').addEventListener('click', () => {
+            if (currentVehicle) audio.playHorn(currentVehicle.isBus);
+        });
+        document.getElementById('btn-touch-cam').addEventListener('click', () => {
+            cameraMode = (cameraMode + 1) % 3;
+        });
+        document.getElementById('btn-touch-reset').addEventListener('click', () => {
+            if (currentVehicle) {
+                currentVehicle.mesh.rotation.z = 0;
+                currentVehicle.speed = 0;
+                currentVehicle.mesh.position.y = getGroundElevation(currentVehicle.mesh.position.x, currentVehicle.mesh.position.z) + 0.2;
+            }
+        });
+
+        // Help Modal Toggles
+        document.getElementById('btn-show-help').addEventListener('click', () => {
+            document.getElementById('help-modal').classList.remove('hidden');
+        });
+        document.getElementById('btn-close-help').addEventListener('click', () => {
+            document.getElementById('help-modal').classList.add('hidden');
+        });
+        document.getElementById('btn-dismiss-help').addEventListener('click', () => {
+            document.getElementById('help-modal').classList.add('hidden');
+        });
+
+        // Keyboard & Desktop Mouse Fallback
+        window.addEventListener('keydown', (e) => {
+            audio.init();
+            switch (e.code) {
+                case 'KeyW': case 'ArrowUp': keys.forward = true; break;
+                case 'KeyS': case 'ArrowDown': keys.backward = true; break;
+                case 'KeyA': case 'ArrowLeft': keys.left = true; break;
+                case 'KeyD': case 'ArrowRight': keys.right = true; break;
+                case 'ShiftLeft': keys.sprint = true; break;
+                case 'Space':
+                    if (!currentVehicle && player.isGrounded) {
+                        player.vy = 8.5;
+                        player.isGrounded = false;
+                        audio.playJump();
+                    }
+                    break;
+                case 'KeyE': case 'KeyF': toggleVehicleMount(); break;
+                case 'KeyH': if (currentVehicle) audio.playHorn(currentVehicle.isBus); break;
+                case 'KeyC': cameraMode = (cameraMode + 1) % 3; break;
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            switch (e.code) {
+                case 'KeyW': case 'ArrowUp': keys.forward = false; break;
+                case 'KeyS': case 'ArrowDown': keys.backward = false; break;
+                case 'KeyA': case 'ArrowLeft': keys.left = false; break;
+                case 'KeyD': case 'ArrowRight': keys.right = false; break;
+                case 'ShiftLeft': keys.sprint = false; break;
+            }
+        });
+    }
+
+    function bindButtonHold(elementId, callback) {
+        const btn = document.getElementById(elementId);
+        if (!btn) return;
+        const start = (e) => { e.preventDefault(); audio.init(); callback(true); };
+        const end = (e) => { e.preventDefault(); callback(false); };
+        btn.addEventListener('touchstart', start, { passive: false });
+        btn.addEventListener('touchend', end, { passive: false });
+        btn.addEventListener('mousedown', start);
+        window.addEventListener('mouseup', end);
+    }
+
+    function toggleVehicleMount() {
+        if (currentVehicle) {
+            // Dismount
+            player.mesh.position.set(
+                currentVehicle.mesh.position.x + 2.5,
+                getGroundElevation(currentVehicle.mesh.position.x + 2.5, currentVehicle.mesh.position.z),
+                currentVehicle.mesh.position.z
+            );
+            player.mesh.visible = true;
+            currentVehicle = null;
+
+            // Update HUD
+            document.getElementById('speedometer-box').classList.add('hidden');
+            document.getElementById('btn-enter-label').innerText = '🚗 DRIVE';
+            document.getElementById('brake-label-main').innerText = 'JUMP';
+            document.getElementById('brake-label-sub').innerText = 'LEAP ⚡';
+            document.getElementById('gas-label-main').innerText = 'SPRINT';
+            document.getElementById('gas-label-sub').innerText = 'FAST 🏃';
+            audio.setEngineState(0, false);
+        } else {
+            // Find nearby vehicle
+            let nearest = null;
+            let minDist = 5.2;
+
+            drivableVehicles.forEach(veh => {
+                const dist = player.mesh.position.distanceTo(veh.mesh.position);
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearest = veh;
+                }
+            });
+
+            if (nearest) {
+                currentVehicle = nearest;
+                player.mesh.visible = false;
+
+                // Update HUD
+                document.getElementById('speedometer-box').classList.remove('hidden');
+                document.getElementById('veh-hud-title').innerText = nearest.name.toUpperCase();
+                document.getElementById('btn-enter-label').innerText = '🚶 EXIT';
+                document.getElementById('brake-label-main').innerText = 'BRAKE';
+                document.getElementById('brake-label-sub').innerText = '/ REV';
+                document.getElementById('gas-label-main').innerText = 'GAS';
+                document.getElementById('gas-label-sub').innerText = 'ACCEL 🚀';
+                audio.playHorn(nearest.isBus);
+            }
+        }
+    }
+
+    function updatePhysics(dt) {
+        if (currentVehicle) {
+            // Vehicle Driving Physics
+            const v = currentVehicle;
+            let accel = 0;
+            let steer = 0;
+
+            if (keys.forward) accel += 1;
+            if (keys.backward) accel -= 1;
+            if (touchState.joystickActive) {
+                accel -= touchState.inputY;
+                steer += touchState.inputX;
+            }
+            if (keys.left) steer -= 1;
+            if (keys.right) steer += 1;
+
+            if (accel > 0.1) {
+                v.speed = Math.min(v.maxSpeed, v.speed + v.accel * accel * dt);
+            } else if (accel < -0.1) {
+                v.speed = Math.max(-v.maxSpeed * 0.45, v.speed + v.accel * accel * dt);
+            } else {
+                v.speed *= 0.96; // drag
+                if (Math.abs(v.speed) < 0.1) v.speed = 0;
+            }
+
+            if (Math.abs(v.speed) > 0.2) {
+                const dir = v.speed > 0 ? 1 : -1;
+                v.mesh.rotation.y -= steer * v.turnSpeed * dir * dt;
+            }
+
+            const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), v.mesh.rotation.y);
+            const nX = v.mesh.position.x + forward.x * v.speed * dt;
+            const nZ = v.mesh.position.z + forward.z * v.speed * dt;
+
+            if (!checkCollision(nX, nZ, 1.8)) {
+                v.mesh.position.x = nX;
+                v.mesh.position.z = nZ;
+            } else {
+                v.speed *= -0.3;
+            }
+
+            v.mesh.position.y = getGroundElevation(v.mesh.position.x, v.mesh.position.z);
+
+            // Wheel spinning
+            if (v.mesh.userData.wheels) {
+                v.mesh.userData.wheels.forEach(w => {
+                    w.rotation.x += (v.speed / 1.4) * dt;
+                });
+            }
+
+            audio.setEngineState(v.speed / v.maxSpeed, true, v.isBus);
+
+            const kmh = Math.round(Math.abs(v.speed) * 4.2);
+            document.getElementById('speed-digits').innerText = kmh;
+            document.getElementById('speed-meter-fill').style.width = `${Math.min(100, (kmh / 120) * 100)}%`;
+        } else {
+            // Player On-Foot Physics
+            let mx = 0, mz = 0;
+            if (keys.forward) mz -= 1;
+            if (keys.backward) mz += 1;
+            if (keys.left) mx -= 1;
+            if (keys.right) mx += 1;
+
+            if (touchState.joystickActive) {
+                mx += touchState.inputX;
+                mz += touchState.inputY;
+            }
+
+            const len = Math.hypot(mx, mz);
+            const isMoving = len > 0.15;
+            const spd = (keys.sprint || keys.forward) ? 9.5 : 5.0;
+
+            if (isMoving) {
+                const moveAngle = Math.atan2(mx, mz) + cameraControl.theta;
+                const moveX = Math.sin(moveAngle) * spd * Math.min(1, len) * dt;
+                const moveZ = Math.cos(moveAngle) * spd * Math.min(1, len) * dt;
+
+                const nx = player.mesh.position.x + moveX;
+                const nz = player.mesh.position.z + moveZ;
+
+                if (!checkCollision(nx, nz, 0.6)) {
+                    player.mesh.position.x = nx;
+                    player.mesh.position.z = nz;
+                }
+
+                player.mesh.rotation.y = moveAngle;
+
+                player.walkCycle += dt * 10;
+                const swing = Math.sin(player.walkCycle) * 0.6;
+                player.lArm.rotation.x = swing;
+                player.rArm.rotation.x = -swing;
+                player.lLeg.rotation.x = -swing;
+                player.rLeg.rotation.x = swing;
+            } else {
+                player.lArm.rotation.x = THREE.MathUtils.lerp(player.lArm.rotation.x, 0, 0.1);
+                player.rArm.rotation.x = THREE.MathUtils.lerp(player.rArm.rotation.x, 0, 0.1);
+                player.lLeg.rotation.x = THREE.MathUtils.lerp(player.lLeg.rotation.x, 0, 0.1);
+                player.rLeg.rotation.x = THREE.MathUtils.lerp(player.rLeg.rotation.x, 0, 0.1);
+            }
+
+            // Gravity & Grounding
+            const groundY = getGroundElevation(player.mesh.position.x, player.mesh.position.z);
+            player.vy -= 22 * dt;
+            player.mesh.position.y += player.vy * dt;
+
+            if (player.mesh.position.y <= groundY) {
+                player.mesh.position.y = groundY;
+                player.vy = 0;
+                player.isGrounded = true;
+            }
+
+            // Check Vehicle Enter Prompt
+            checkProximityPrompt();
+        }
+    }
+
+    function checkProximityPrompt() {
+        const promptEl = document.getElementById('enter-prompt');
+        let found = null;
+
+        drivableVehicles.forEach(veh => {
+            const dist = player.mesh.position.distanceTo(veh.mesh.position);
+            if (dist < 4.8) found = veh;
+        });
+
+        if (found) {
+            promptEl.classList.remove('hidden');
+            document.getElementById('prompt-veh-name').innerText = `DRIVE ${found.name.toUpperCase()}`;
+        } else {
+            promptEl.classList.add('hidden');
+        }
+    }
+
+    function updateTrafficAndNPCs(dt) {
+        npcTraffic.forEach(veh => {
+            veh.mesh.position.z += veh.direction * veh.speed * dt;
+            veh.mesh.position.y = getGroundElevation(veh.mesh.position.x, veh.mesh.position.z);
+
+            if (veh.direction === 1 && veh.mesh.position.z > 140) veh.mesh.position.z = -280;
+            else if (veh.direction === -1 && veh.mesh.position.z < -280) veh.mesh.position.z = 140;
+        });
+
+        npcPedestrians.forEach(ped => {
+            ped.mesh.position.z += ped.dirZ * ped.speed * dt;
+            ped.mesh.position.y = getGroundElevation(ped.mesh.position.x, ped.mesh.position.z);
+
+            if (ped.mesh.position.z > ped.maxZ || ped.mesh.position.z < ped.minZ) {
+                ped.dirZ *= -1;
+                ped.mesh.rotation.y = ped.dirZ > 0 ? 0 : Math.PI;
+            }
+        });
+    }
+
+    function updateCamera() {
+        const target = currentVehicle ? currentVehicle.mesh.position : player.mesh.position;
+        const targetH = currentVehicle ? 1.8 : 1.4;
+
+        let d = 8.5;
+        let hOff = 2.4;
+
+        if (cameraMode === 1) { d = 14.0; hOff = 5.2; }
+        else if (cameraMode === 2) { d = 22.0; hOff = 18.0; }
+
+        const cx = target.x + Math.sin(cameraControl.theta) * Math.cos(cameraControl.phi) * d;
+        const cy = target.y + Math.sin(cameraControl.phi) * d + hOff;
+        const cz = target.z + Math.cos(cameraControl.theta) * Math.cos(cameraControl.phi) * d;
+
+        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.12);
+        camera.lookAt(target.x, target.y + targetH, target.z);
+    }
+
+    function renderMinimap() {
+        const canvas = document.getElementById('minimap-canvas');
+        const ctx = canvas.getContext('2d');
+        const s = canvas.width = 160;
+        canvas.height = 160;
+
+        ctx.clearRect(0, 0, s, s);
+
+        const target = currentVehicle ? currentVehicle.mesh.position : player.mesh.position;
+        const scale = 0.28;
+
+        ctx.save();
+        ctx.translate(s / 2, s / 2);
+        ctx.rotate(-cameraControl.theta);
+
+        // Kovalam & Vizhinjam Coast on radar
+        ctx.fillStyle = '#0284c7';
+        ctx.beginPath();
+        ctx.arc((-270 - target.x) * scale, (250 - target.z) * scale, 55, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Main Roads
+        ctx.strokeStyle = '#64748b';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo((0 - target.x) * scale, (-280 - target.z) * scale);
+        ctx.lineTo((0 - target.x) * scale, (140 - target.z) * scale);
+        ctx.moveTo((-160 - target.x) * scale, (0 - target.z) * scale);
+        ctx.lineTo((120 - target.x) * scale, (0 - target.z) * scale);
+        ctx.stroke();
+
+        // Landmark Markers
+        landmarkZones.forEach(z => {
+            const rx = (z.x - target.x) * scale;
+            const rz = (z.z - target.z) * scale;
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.arc(rx, rz, 3.5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        ctx.restore();
+
+        // Center Player / Vehicle Pointer
+        ctx.save();
+        ctx.translate(s / 2, s / 2);
+        ctx.fillStyle = '#ef4444';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        const fwd = currentVehicle ? (currentVehicle.mesh.rotation.y - cameraControl.theta) : (player.mesh.rotation.y - cameraControl.theta);
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(-Math.sin(fwd) * 12, -Math.cos(fwd) * 12);
+        ctx.stroke();
+        ctx.restore();
+
+        // Check Landmark Zone
+        checkLandmarkZone(target);
+    }
+
+    function checkLandmarkZone(pos) {
+        let current = null;
+        for (let z of landmarkZones) {
+            if (Math.hypot(pos.x - z.x, pos.z - z.z) < z.radius) {
+                current = z;
+                break;
+            }
+        }
+
+        if (current) {
+            document.getElementById('zone-name-pill').innerText = current.name;
+            if (current.id !== currentLandmarkId) {
+                currentLandmarkId = current.id;
+                triggerToast(current);
+            }
+        }
+    }
+
+    function triggerToast(zone) {
+        const toast = document.getElementById('landmark-toast');
+        document.getElementById('toast-icon').innerText = zone.icon;
+        document.getElementById('toast-name').innerText = zone.name;
+
+        toast.classList.remove('hidden', 'banner-pop');
+        void toast.offsetWidth;
+        toast.classList.add('banner-pop');
+
+        audio.playDiscoveryDing();
+
+        setTimeout(() => {
+            toast.classList.add('hidden');
+        }, 3600);
+    }
+
+    function animate() {
+        requestAnimationFrame(animate);
+
+        const dt = Math.min(clock.getDelta(), 0.08);
+        const time = clock.getElapsedTime();
+
+        updatePhysics(dt);
+        updateTrafficAndNPCs(dt);
+        updateCamera();
+
+        animatedOceanList.forEach(item => item.update(time));
+        renderMinimap();
+
+        renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    window.onload = function() {
+        initScene();
+        buildTrivandrumMiniatureWorld();
+        createPlayer();
+        spawnFleet();
+        spawnTrafficAndWalkers();
+        setupControls();
+        animate();
+    };
+    </script>
+</body>
+</html>
+```
